@@ -9,21 +9,15 @@
 void add_oxygen_atom_to_air(void); 
 void * active_carbon_atoms(void *);
  
-
 #define COUNT 10
 #define SLEEP_MAX 21 /* MAX time to sleep */
 // Note: make sleep large just to make sure there are not 
 // enough Oxygen for Carbon threads. 
 
 pthread_mutex_t lock;
-int oxygen_atoms = 0; 
+int oxygen_atoms = 0; // total O atoms released (bonded + unbonded)
 int co2_count; 
-int CO_present = 0;
-
-/* You would need synch primitives 
- * Use them wisely
- */ 
-
+int O_inAir = 0; // free O atoms in air
 
 void add_carbon_dioxyde(void)
 { 
@@ -44,21 +38,22 @@ void * generate_oxygen(void * dummy)
     //want to know the number of oxygen atoms created  
     oxygen_atoms ++;
 
-    add_oxygen_atom_to_air(); // need to implement this below.
+    add_oxygen_atom_to_air();
     
     usleep(rand() % SLEEP_MAX); 
   }
+  pthread_exit(NULL);
 }
 
 
 void add_oxygen_atom_to_air()
 {
   // this function is called when an oxygen atom is 
-  // released into the air. Before this I have a count
-  // but now I need a suitable primitive so that C atoms
-  // can bound with these.
-  // What is a suitable data structure here? 
-  // or may be a synch prmitive?
+  // released into the air
+
+  pthread_mutex_lock(&lock);
+  O_inAir++;
+  pthread_mutex_unlock(&lock);
 }
 
 void * activate_carbon_atoms() 
@@ -66,17 +61,21 @@ void * activate_carbon_atoms()
   // there are infinite amounts of active carbon atoms. 
   // They are looking for two oxygen atoms to make stable 
   // carbon dioxide. 
+  int type;
+  pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &type);
 
-  while(1) {
+  while(1) 
+  {
     pthread_mutex_lock(&lock);
-    if(oxygen_atoms == 2)
+    if(O_inAir == 2)
     {
       add_carbon_dioxyde();
-      oxygen_atoms-=2;
+      O_inAir-=2;
     }
     pthread_mutex_unlock(&lock);
-
+  
   }
+  pthread_exit(NULL);
 }
 
 #define CTHREADS   20
@@ -85,7 +84,6 @@ void * activate_carbon_atoms()
 int main() 
 { 
 // init everything 
-
    pthread_t carbon_threads[CTHREADS]; 
    int i;
    for(i=0; i<CTHREADS; i++) {
@@ -95,17 +93,18 @@ int main()
    pthread_t oxygen_thread;
    assert(!pthread_create(&oxygen_thread, NULL, generate_oxygen, NULL));
 
-   // This bit is a real hack. I wait for the oxygen thread  
-   // once it exits, give some time for carbon threads to create CO2
-   // finally I check the co2_count; it should be COUNT 
-   // if not there is some issue 
    void * dummy; 
    pthread_join(oxygen_thread, &dummy); 
    usleep(100); 
 
    printf("You code %s\n", co2_count == COUNT ? "Works. Good stuff. Run agin to make sure" : "Does not work. Back to design");
-// Clean up. 
-// Implement the clean up code. 
+
+   
+   pthread_mutex_destroy(&lock); // destroy mutex
+   for(i=0; i<CTHREADS; i++)
+     pthread_cancel(carbon_threads[i]); // cancle each carbon_thread
+   pthread_exit(NULL);
+ 
  return 0; 
 
 } 
