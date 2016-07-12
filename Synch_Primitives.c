@@ -15,9 +15,10 @@ void * active_carbon_atoms(void *);
 // Note: make sleep large just to make sure there are not 
 // enough Oxygen for Carbon threads. 
 
- 
+pthread_mutex_t lock;
 int oxygen_atoms = 0; 
 int co2_count; 
+int CO_present = 0;
 
 /* You would need synch primitives 
  * Use them wisely
@@ -65,14 +66,16 @@ void * activate_carbon_atoms()
   // there are infinite amounts of active carbon atoms. 
   // They are looking for two oxygen atoms to make stable 
   // carbon dioxide. 
+
   while(1) {
-    /* Make sure you have to oxygen atoms */
-    // Your CODE SHOULD BE HERE
+    pthread_mutex_lock(&lock);
+    if(oxygen_atoms == 2)
+    {
+      add_carbon_dioxyde();
+      oxygen_atoms-=2;
+    }
+    pthread_mutex_unlock(&lock);
 
-    /* Then you get CO2 */
-
-     
-    add_carbon_dioxyde(); 
   }
 }
 
@@ -97,7 +100,7 @@ int main()
    // finally I check the co2_count; it should be COUNT 
    // if not there is some issue 
    void * dummy; 
-   pthread_join(oxygen_thread,&dummy); 
+   pthread_join(oxygen_thread, &dummy); 
    usleep(100); 
 
    printf("You code %s\n", co2_count == COUNT ? "Works. Good stuff. Run agin to make sure" : "Does not work. Back to design");
